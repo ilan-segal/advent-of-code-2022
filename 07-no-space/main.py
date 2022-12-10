@@ -23,7 +23,7 @@ class Directory:
     parent: Optional[Directory]
     children: list[File | Directory] = []
 
-    def get_child_by_name(self, name: str) -> File | Directory | None:
+    def get_child_by_name(self, name: str) -> Optional[File | Directory]:
         for child in self.children:
             if child.name == name:
                 return child
