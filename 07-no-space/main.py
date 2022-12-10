@@ -10,6 +10,7 @@ from typing import Optional
 
 @dataclass
 class File:
+
     name: str
     size: int
 
@@ -19,6 +20,7 @@ class File:
 
 @dataclass
 class Directory:
+    
     name: str
     parent: Optional[Directory]
     children: list[File | Directory] = []
