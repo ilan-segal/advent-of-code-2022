@@ -1,5 +1,5 @@
 """
-https://adventofcode.com/2022/day/5/input
+https://adventofcode.com/2022/day/5
 """
 
 
