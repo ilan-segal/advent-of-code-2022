@@ -100,9 +100,7 @@ def build_directory_tree(raw_commands: str) -> Directory:
     return root
 
 
-def part_1():
-    raw_commands = get_raw_input()
-    root = build_directory_tree(raw_commands)
+def part_1(root: Directory):
     flattened_tree = root.get_flattened_tree()
     directories = filter(lambda item: isinstance(item, Directory), flattened_tree)
     item_sizes = map(len, directories)
@@ -112,5 +110,22 @@ def part_1():
     print(f'part_1={total_size}')
 
 
+def part_2(root: Directory):
+    DISK_SPACE = 70_000_000
+    REQUIRED_SPACE = 30_000_000
+    used_space = len(root)
+    free_space = DISK_SPACE - used_space
+    space_to_free = REQUIRED_SPACE - free_space
+    flattened_tree = root.get_flattened_tree()
+    directories = filter(lambda item: isinstance(item, Directory), flattened_tree)
+    directory_sizes = map(len, directories)
+    deletion_candidate_sizes = filter(space_to_free.__le__, directory_sizes)
+    min_deletion_size = min(deletion_candidate_sizes)
+    print(f'part_1={min_deletion_size}')
+
+
 if __name__ == '__main__':
-    part_1()
+    raw_commands = get_raw_input()
+    root = build_directory_tree(raw_commands)
+    part_1(root)
+    part_2(root)
