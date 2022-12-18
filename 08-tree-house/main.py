@@ -35,16 +35,12 @@ def get_visibility_of_row(grid_row: TreeGrid) -> VisibilityGrid:
 
 def get_visibility_of_grid(grid: TreeGrid) -> VisibilityGrid:
     horizontal_visibility = np.apply_along_axis(get_visibility_of_row, 1, grid)
-    print(horizontal_visibility.astype(int))
     vertical_visibility = np.apply_along_axis(get_visibility_of_row, 1, grid.T).T
-    print(vertical_visibility.astype(int))
     return np.logical_or(horizontal_visibility, vertical_visibility)
 
 
 def part_1(tree_grid: TreeGrid) -> None:
-    print(tree_grid)
     visibility_grid = get_visibility_of_grid(tree_grid)
-    print(visibility_grid.astype(int))
     n_visibile = np.sum(visibility_grid)
     print(f'part_1={n_visibile}')
 
