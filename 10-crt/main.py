@@ -45,7 +45,7 @@ def should_draw_pixel(cycle_num: int, sprite_pos: int) -> bool:
 def part_2(commands: list[str]) -> None:
     xs = get_register_series(commands)
     for cycle_num, x_register in enumerate(xs):
-        print('#' if should_draw_pixel(cycle_num, x_register) else '.', end='')
+        print('#' if should_draw_pixel(cycle_num, x_register) else ' ', end='')
         if (cycle_num + 1) % 40 == 0:
             print('')
 
