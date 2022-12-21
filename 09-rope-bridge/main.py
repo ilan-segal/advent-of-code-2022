@@ -3,14 +3,6 @@ https://adventofcode.com/2022/day/9
 """
 
 
-import numpy as np
-from numpy import typing as npt
-
-
-TreeGrid = npt.NDArray[np.int8]
-VisibilityGrid = npt.NDArray[np.bool8]
-
-
 def get_raw_input() -> str:
     return open('09-rope-bridge/input.txt', 'r').read().strip().replace('\r\n', '\n')
 
