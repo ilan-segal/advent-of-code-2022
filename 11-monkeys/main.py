@@ -30,9 +30,11 @@ class Monkey:
     inspection_count: int = 0
 
     def take_turn(self, monkeys_by_id: dict[int, Monkey], extra_worrying: bool) -> None:
+        modulo = reduce(lambda x, y: x*y, [m.test_factor for m in monkeys_by_id.values()])
         while len(self.items) > 0:
             cur_item = self.items.pop(0)
             self.__inspect_item(cur_item, extra_worrying)
+            cur_item.worry_level %= modulo
             self.__throw_item(cur_item, monkeys_by_id)
             
     def __inspect_item(self, item: Item, extra_worrying: bool) -> None:
@@ -95,7 +97,6 @@ class MonkeyPack:
     def get_monkey_business(self) -> int:
         inspection_counts = [m.inspection_count for m in self.monkeys]
         a, b = sorted(inspection_counts)[-2:]
-        print(a, b)
         return a * b
 
 
@@ -112,6 +113,14 @@ def part_1(raw_input: str) -> None:
     print(f'part_1={monkey_business}')
 
 
+def part_2(raw_input: str) -> None:
+    monkey_pack = create_monkey_pack(raw_input)
+    monkey_pack.play_n_rounds(10_000, True)
+    monkey_business = monkey_pack.get_monkey_business()
+    print(f'part_2={monkey_business}')
+
+
 if __name__ == '__main__':
     raw_input = get_raw_input()
     part_1(raw_input)
+    part_2(raw_input)
