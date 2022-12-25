@@ -30,11 +30,24 @@ class Monkey:
     inspection_count: int = 0
 
     def take_turn(self, monkeys_by_id: dict[int, Monkey], extra_worrying: bool) -> None:
-        modulo = reduce(lambda x, y: x*y, [m.test_factor for m in monkeys_by_id.values()])
+        M = reduce(lambda x, y: x*y, [m.test_factor for m in monkeys_by_id.values()])
         while len(self.items) > 0:
             cur_item = self.items.pop(0)
             self.__inspect_item(cur_item, extra_worrying)
-            cur_item.worry_level %= modulo
+            """
+            It's possible for an item's worry level to blow up very quickly. We
+            can keep it bounded by finding its value in a certain modulo group.
+            We take advantage of the following fact:
+
+            If:
+                a is congruent to b modulo m_i for any m_1, m_2, ..., m_n
+            Then:
+                a is congruent to b modulo (m_1 * m_2 * ... * m_n)
+
+            In the context of this problem, m_1 ... m_n correspond to each
+            monkey's test factor. M is the product of all the test factors.
+            """
+            cur_item.worry_level %= M
             self.__throw_item(cur_item, monkeys_by_id)
             
     def __inspect_item(self, item: Item, extra_worrying: bool) -> None:
