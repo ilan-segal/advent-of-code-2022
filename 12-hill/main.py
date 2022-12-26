@@ -131,8 +131,7 @@ class Field:
 
     __nodes: list[list[Node]]
 
-    def __init__(self, height_grid: list[list[int]]) -> None:
-        adjacency_map = get_adjacency_map(height_grid)
+    def __init__(self, height_grid: list[list[int]], adjacency_map: dict[Coordinates, list[Coordinates]]) -> None:
         num_rows, num_cols = len(height_grid), len(height_grid[0])
         self.__nodes = [[Node(height_grid[row][col], (row, col)) for col in range(num_cols)] for row in range(num_rows)]
         for (x, y), neighbor_positions in adjacency_map.items():
@@ -177,10 +176,10 @@ class Field:
         return None
 
 
-def part_1(raw_input: str) -> None:
+def part_1(height_grid: list[list[int]]) -> None:
 
-    height_grid = get_height_grid(raw_input)
-    field = Field(height_grid)
+    adjacency_map = get_adjacency_map(height_grid)
+    field = Field(height_grid, adjacency_map)
 
     start_pos, end_pos = get_start_and_end(raw_input)
     path = field.find_path(start_pos, end_pos)
@@ -192,4 +191,5 @@ def part_1(raw_input: str) -> None:
 
 if __name__ == '__main__':
     raw_input = get_raw_input()
-    part_1(raw_input)
+    height_grid = get_height_grid(raw_input)
+    part_1(height_grid)
