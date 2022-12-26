@@ -6,6 +6,7 @@ https://adventofcode.com/2022/day/12
 from __future__ import annotations
 from dataclasses import dataclass, field
 import heapq
+from typing import Callable
 
 
 def get_raw_input() -> str:
@@ -145,11 +146,17 @@ class Field:
         row, col = pos
         return self.__nodes[row][col]
 
-    def find_path(self, start_position: Coordinates, end_position: Coordinates) -> list[Node] | None:
+    def find_path(self,
+        start: Coordinates, 
+        end: Coordinates | Callable[[Node], bool],
+    ) -> list[Node] | None:
+
+        goal_predicate: Callable[[Node], bool] = end if callable(end) else (lambda node: node.position == end)
+
         for row in self.__nodes:
             for node in row:
                 node.reset()
-        start_node, end_node = self[start_position], self[end_position]
+        start_node = self[start]
         start_node.weight = 0
         closed_nodes: set[Node] = {start_node}
         open_nodes: list[Node] = start_node.reachable_neighbors
@@ -164,9 +171,9 @@ class Field:
                 neighbor.set_parent_if_better(cur_node)
                 if neighbor not in open_nodes:
                     heapq.heappush(open_nodes, neighbor)
+            if goal_predicate(cur_node):
+                return cur_node.get_path()
             closed_nodes.add(cur_node)
-            if end_node in closed_nodes:
-                return end_node.get_path()
         return None
 
 
