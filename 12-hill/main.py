@@ -189,7 +189,34 @@ def part_1(height_grid: list[list[int]]) -> None:
     print(f'part_1={num_steps}')
 
 
+def get_inverted_adjacency_map(adjacency_map: dict[Coordinates, list[Coordinates]]) -> dict[Coordinates, list[Coordinates]]:
+    inverted: dict[Coordinates, list[Coordinates]] = dict()
+    for coords, adjacent_coords in adjacency_map.items():
+        for neighbor in adjacent_coords:
+            if neighbor not in inverted:
+                inverted[neighbor] = []
+            inverted[neighbor].append(coords)
+    return inverted
+
+
+def part_2(height_grid: list[list[int]]) -> None:
+
+    # Pathfinding running backwards
+    adjacency_map = get_adjacency_map(height_grid)
+    inverted_adjacency_map = get_inverted_adjacency_map(adjacency_map)
+
+    field = Field(height_grid, inverted_adjacency_map)
+
+    start_pos, end_pos = get_start_and_end(raw_input)
+    path = field.find_path(end_pos, lambda node: node.value == 0)
+    # print(str(field))
+    assert path is not None, f'No path found from {end_pos} to lowest elevation'
+    num_steps = len(path) - 1
+    print(f'part_2={num_steps}')
+
+
 if __name__ == '__main__':
     raw_input = get_raw_input()
     height_grid = get_height_grid(raw_input)
     part_1(height_grid)
+    part_2(height_grid)
