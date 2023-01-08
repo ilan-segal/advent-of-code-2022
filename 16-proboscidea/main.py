@@ -41,9 +41,9 @@ How many constraints and variables are we optimizing?
 
     Let there be N optimizable valves (valves with flow greater than 0).
     Each such valve v_i entails the following constraints:
-        1 <= t_i <= 30
+        1 + d_i0 <= t_i <= 30, where d_i0 is the distance between v_i and the starting valve v_0
     This adds N constraints and N decision variables.
-    There are also the following constraints for each i, j:
+    There are also the following constraints for each unordered pair i, j:
         1 + d_ij <= t_i - t_j + 60 * B_ij
         -59 + d_ij <= t_j - t_i - 60 * B_ij
         0 <= B_ij <= 1
@@ -128,10 +128,11 @@ import numpy as np
 
 def optimize_valve_times(distance_map: DistanceMap, valve_rate_by_label: dict[str, int]) -> OptimizeResult:
     N = len(valve_rate_by_label)
+    time_lower_bounds = [1+distance_map['AA', label] for label in valve_rate_by_label.keys()]
     num_B = (N * (N - 1)) // 2
     num_variables = N + num_B
-    decision_bounds = Bounds(
-        np.array([1] * N + [0] * num_B),  # type: ignore
+    time_lower_bounds = Bounds(
+        np.array(time_lower_bounds + [0] * num_B),  # type: ignore
         np.array([30] * N + [1] * num_B),  # type: ignore
     )
     constraints: list[LinearConstraint] = []
@@ -158,9 +159,9 @@ def optimize_valve_times(distance_map: DistanceMap, valve_rate_by_label: dict[st
             A[0][N + len(seen_pairs) - 1] = -60
             constraints.append(LinearConstraint(A, lb=-59+distance))
     return milp(
-        c=[valve_rate_by_label[label] for label in labels],
-        integrality=1,
-        bounds=decision_bounds,
+        c=[valve_rate_by_label[label] for label in labels] + [0 for _ in range(num_B)],
+        integrality=[1] * num_variables,
+        bounds=time_lower_bounds,
         constraints=constraints,
         options={'disp': True},
     )
@@ -173,6 +174,10 @@ def part_1(raw_input: str) -> None:
     print(optimizable_flows_by_label)
     result = optimize_valve_times(distances, optimizable_flows_by_label)
     print(result)
+    print(list(result.x))
+    activation_times = zip(list(map(int, result.x)), optimizable_flows_by_label.keys())
+    for t, label in sorted(activation_times):
+        print(f'Valve {label} opened at {t=}')
 
 
 if __name__ == '__main__':
