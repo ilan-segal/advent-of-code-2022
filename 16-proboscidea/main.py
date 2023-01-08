@@ -39,12 +39,10 @@ Subject to:
     -B_ij >= -1
     ...
 
-If there are N optimizable valves then there are 2N * 4N^2 - 4N = 4N^2 - 2N constraints.
+If there are N optimizable valves then there are 2N + 4N^2 - 4N = 4N^2 - 2N constraints.
 """
 
-
-from __future__ import annotations
-from dataclasses import dataclass
+import heapq
 import re
 import time
 from typing import TypeVar, ParamSpec, Callable
@@ -65,54 +63,27 @@ def get_raw_input() -> str:
     return open('16-proboscidea/input.txt', 'r').read().strip().replace('\r\n', '\n')
 
 
-@dataclass
-class Valve:
-    label: str
-    flow_rate: int
-    __is_open: bool = False
-
-    def get_flow(self) -> int:
-        return self.flow_rate * self.__is_open
-
-    def is_optimized(self) -> bool:
-        return self.flow_rate == 0 or self.__is_open
-
-    def open(self) -> Valve:
-        assert not self.__is_open, f'Valve {self.label} is already open.'
-        return Valve(self.label, self.flow_rate, True)
+def resolve_distance(start_label: str, end_label: str, adjacency_map: dict[str, list[str]]) -> int:
+    paths: list[tuple[int, list[str]]] = []
+    heapq.heappush(paths, (0, [start_label]))
+    while len(paths) > 0:
+        cur_path_length, cur_path = heapq.heappop(paths)
+        if cur_path[-1] == end_label:
+            return cur_path_length
+        for next_label in adjacency_map[cur_path[-1]]:
+            if next_label in cur_path:
+                continue
+            heapq.heappush(paths, (cur_path_length + 1, cur_path + [next_label]))
+    return -1
 
 
-@dataclass
-class VolcanoState:
-    valves_by_label: dict[str, Valve]
-    tunnels: dict[str, list[str]]
-    cur_valve_label: str = 'AA'
-    released_pressure: int = 0
-    minutes_passed: int = 0
-
-    def __get_minute_flow(self) -> int:
-        return sum(valve.get_flow() for valve in self.valves_by_label.values())
-
-    def move_to(self, valve_label: str) -> VolcanoState:
-        assert valve_label != self.cur_valve_label, f'Already at valve {valve_label}'
-        assert valve_label in self.tunnels[self.cur_valve_label], f'Cannot access {valve_label} from {self.cur_valve_label}'
-        new_released_pressure = self.released_pressure + self.__get_minute_flow()
-        return VolcanoState(self.valves_by_label, self.tunnels, valve_label, new_released_pressure, self.minutes_passed + 1)
-
-    def open_current_valve(self) -> VolcanoState:
-        new_released_pressure = self.released_pressure + self.__get_minute_flow()
-        new_dict = self.valves_by_label.copy()
-        new_valve = new_dict[self.cur_valve_label].open()
-        new_dict[self.cur_valve_label] = new_valve
-        return VolcanoState(new_dict, self.tunnels, self.cur_valve_label, new_released_pressure, self.minutes_passed + 1)
-
-    def is_optimized(self) -> bool:
-        return all(valve.is_optimized() for valve in self.valves_by_label.values())
+DistanceMap = dict[tuple[str, str], int]
 
 
-def create_volcano_state(raw_input: str) -> VolcanoState:
-    valves_by_label: dict[str, Valve] = dict()
-    tunnels: dict[str, list[str]] = dict()
+def create_volcano_state(raw_input: str) -> tuple[DistanceMap, dict[str, int]]:
+    adjacency_map: dict[str, list[str]] = dict()
+    optimizable_flows_by_label: dict[str, int] = dict()
+    valve_labels = []
     for valve_string in raw_input.split('\n'):
         pattern = r'Valve ([A-Z]+) has flow rate=(\d+); tunnels? leads? to valves? (.+)'
         result = re.search(pattern, valve_string)
@@ -120,16 +91,24 @@ def create_volcano_state(raw_input: str) -> VolcanoState:
         valve_label = result.group(1)
         valve_flow_rate = int(result.group(2))
         valve_tunnels = result.group(3).split(', ')
-        valve = Valve(valve_label, valve_flow_rate)
-        valves_by_label[valve_label] = valve
-        tunnels[valve_label] = valve_tunnels
-    return VolcanoState(valves_by_label, tunnels)
+        if valve_flow_rate > 0:
+            optimizable_flows_by_label[valve_label] = valve_flow_rate
+        valve_labels.append(valve_label)
+        adjacency_map[valve_label] = valve_tunnels
+    distances: DistanceMap = dict()
+    for start in valve_labels:
+        for end in valve_labels:
+            if start == end:
+                continue
+            distances[start, end] = resolve_distance(start, end, adjacency_map)
+    return distances, optimizable_flows_by_label
 
 
 @time_execution
 def part_1(raw_input: str) -> None:
-    init_state = create_volcano_state(raw_input)
-    print(init_state)
+    distances, optimizable_flows_by_label = create_volcano_state(raw_input)
+    print(distances)
+    print(optimizable_flows_by_label)
         
 
 if __name__ == '__main__':
