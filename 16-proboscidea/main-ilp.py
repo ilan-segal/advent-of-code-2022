@@ -1,4 +1,9 @@
 """
+THIS IDEA DID NOT PAN OUT.
+I found that there is no way to ensure that times above 30 s are ignored.
+It works if all valves can be activated in under 30 seconds, as with the
+sample input. 
+
 https://adventofcode.com/2022/day/16
 
 For some valve v_i, let r_i be that valve's flow rate.
@@ -42,10 +47,12 @@ How many constraints and variables are we optimizing?
     Let there be N optimizable valves (valves with flow greater than 0).
     Each such valve v_i entails the following constraints:
         1 + d_i0 <= t_i <= 30, where d_i0 is the distance between v_i and the starting valve v_0
+        -30 <= -30 * C_i + t_i <= 0
+        0 <= C_i <= 1 where C_i = 1 <-> t_i is between [0, 30]
     This adds N constraints and N decision variables.
     There are also the following constraints for each unordered pair i, j:
-        1 + d_ij <= t_i - t_j + 60 * B_ij
-        -59 + d_ij <= t_j - t_i - 60 * B_ij
+        1 + d_ij <= t_i - t_j + M * B_ij       for some very large M
+        1 -M + d_ij <= t_j - t_i - M * B_ij  
         0 <= B_ij <= 1
     We do not include the above constraints for j, i or i, i because that would be redundant.
     Thus this adds N*(N-1)*3/2 constraints and N*(N-1)/2 decision variables.
@@ -126,6 +133,8 @@ from scipy.optimize import (
 import numpy as np
 
 
+MAX_TIME = 1_000_000
+
 def optimize_valve_times(distance_map: DistanceMap, valve_rate_by_label: dict[str, int]) -> OptimizeResult:
     N = len(valve_rate_by_label)
     time_lower_bounds = [1+distance_map['AA', label] for label in valve_rate_by_label.keys()]
@@ -133,7 +142,7 @@ def optimize_valve_times(distance_map: DistanceMap, valve_rate_by_label: dict[st
     num_variables = N + num_B
     time_lower_bounds = Bounds(
         np.array(time_lower_bounds + [0] * num_B),  # type: ignore
-        np.array([30] * N + [1] * num_B),  # type: ignore
+        np.array([MAX_TIME] * N + [1] * num_B),  # type: ignore
     )
     constraints: list[LinearConstraint] = []
     seen_pairs: set[tuple[str, str]] = set()
@@ -146,18 +155,19 @@ def optimize_valve_times(distance_map: DistanceMap, valve_rate_by_label: dict[st
                 continue
             seen_pairs.add((a, b))
             distance = distance_map[a, b]
-            # Constraint: 1 + d_ij <= t_i - t_j + 60 * B_ij
+            # Constraint: 1 + d_ij <= t_i - t_j + M * B_ij
+            M = MAX_TIME * 2 + 1
             A = np.zeros((1, num_variables))
             A[0][ai] = 1
             A[0][bi] = -1
-            A[0][N + len(seen_pairs) - 1] = 60
+            A[0][N + len(seen_pairs) - 1] = M
             constraints.append(LinearConstraint(A, lb=1+distance))
-            # Constraint: -59 + d_ij <= t_j - t_i - 60 * B_ij
+            # Constraint: -M + 1 + d_ij <= t_j - t_i - M * B_ij
             A = np.zeros((1, num_variables))
             A[0][bi] = 1
             A[0][ai] = -1
-            A[0][N + len(seen_pairs) - 1] = -60
-            constraints.append(LinearConstraint(A, lb=-59+distance))
+            A[0][N + len(seen_pairs) - 1] = -M
+            constraints.append(LinearConstraint(A, lb=1-M+distance))
     return milp(
         c=[valve_rate_by_label[label] for label in labels] + [0 for _ in range(num_B)],
         integrality=[1] * num_variables,
@@ -176,8 +186,11 @@ def part_1(raw_input: str) -> None:
     print(result)
     print(list(result.x))
     activation_times = zip(list(map(int, result.x)), optimizable_flows_by_label.keys())
+    total_pressure_released = 0
     for t, label in sorted(activation_times):
         print(f'Valve {label} opened at {t=}')
+        total_pressure_released += optimizable_flows_by_label[label] * (30 - t)
+    print(f'part_1={total_pressure_released}')
 
 
 if __name__ == '__main__':
