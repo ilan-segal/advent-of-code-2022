@@ -2,11 +2,10 @@
 https://adventofcode.com/2022/day/16
 """
 
-from functools import cache
 import heapq
 import re
 import time
-from typing import TypeVar, ParamSpec, Callable, Literal
+from typing import TypeVar, ParamSpec, Callable
 
 
 T = TypeVar('T')
@@ -17,6 +16,18 @@ def time_execution(f: Callable[P, T]) -> Callable[P, T]:
         result = f(*args, **kwargs)
         end = time.time()
         print(f'{f.__name__} executed in {end-start:.5} s')
+        return result
+    return wrapped
+
+
+def cache(f: Callable[P, T]) -> Callable[P, T]:
+    memo: dict[str, T] = dict()
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
+        key = str(args)+','+str(kwargs)
+        if key in memo:
+            return memo[key]
+        result = f(*args, **kwargs)
+        memo[key] = result
         return result
     return wrapped
 
@@ -67,28 +78,6 @@ def create_volcano_state(raw_input: str) -> tuple[PathMap, dict[str, int]]:
     return distances, optimizable_flows_by_label
 
 
-# @cache
-def get_pressure_released(current_valve: str, t: int, remaining_rates: dict[str, int], paths: PathMap) -> int:
-    MAX_TIME = 30
-    if t >= MAX_TIME or len(remaining_rates) == 0:
-        return 0
-    if current_valve in remaining_rates:
-        pressure_released = remaining_rates[current_valve] * (MAX_TIME - t)
-        t += 1
-    else:
-        pressure_released = 0
-    remaining_rates = {valve: rate for valve, rate in remaining_rates.items() if valve != current_valve}
-    return pressure_released + max([0] + [
-        get_pressure_released(
-            next_valve, 
-            t + len(paths[(current_valve, next_valve)]) - 1,
-            remaining_rates,
-            paths,
-        )
-        for next_valve in remaining_rates.keys()
-    ])
-
-
 def get_non_repeating_product(l: list[T], n: int) -> list[tuple[T, ...]]:
     """
     Returns l^n excluding tuples with repeated elements.
@@ -121,14 +110,23 @@ def get_minimum_distance(starts: list[str | None], ends: list[str | None], path_
     return min(map(distance, zipped))
 
 
-def get_pressure_released_multiple_agents(
+path_map, optimizable_flows_by_label = create_volcano_state(get_raw_input())
+
+
+@cache
+def get_pressure_released(
     agent_current_valves: list[str | None],
     t: int,
     remaining_rates: dict[str, int],
-    path_map: PathMap) -> int:
+    max_time: int) -> int:
 
-    MAX_TIME = 26
-    if t >= MAX_TIME or len(remaining_rates) == 0:
+    # print('#'*10)
+    # print(f'{agent_current_valves=}')
+    # print(f'{t=}')
+    # print(f'{remaining_rates=}')
+
+    if t >= max_time or len(remaining_rates) == 0:
+        # print('shorting')
         return 0
     remaining_destinations = list(remaining_rates.keys())
     num_destinations = len(remaining_rates)
@@ -145,14 +143,19 @@ def get_pressure_released_multiple_agents(
     destination_permutations = list(set(destination_permutations))
     subsequent_results: list[int] = [0]
     for destinations in destination_permutations:
-        zipped_start_end = zip(agent_current_valves, destinations)
+        zipped_start_end = list(zip(agent_current_valves, destinations))
+        # print(f'{zipped_start_end=}')
         nappers_stay_napping = map(napper_stays_napping, zipped_start_end)
         if not all(nappers_stay_napping):
             # Don't wake them up!
+            # print('Dont wake em up')
             continue
-        paths: map[list[str] | None] = map(path_map.get, zipped_start_end)  # type: ignore
+        # print(f'{destinations=}')
+        paths: list[list[str] | None] = list(map(path_map.get, zipped_start_end))  # type: ignore
+        # print(f'{paths=}')
         calculate_distance = lambda t: get_distance(t[0], t[1], path_map)
-        distances = map(calculate_distance, zipped_start_end)
+        distances = list(map(calculate_distance, zipped_start_end))
+        # print(f'{distances=}')
         minimum_distance = int(min(distances))
         length_of_activated_path = minimum_distance + 1
         actual_destinations: list[str | None] = []
@@ -169,21 +172,17 @@ def get_pressure_released_multiple_agents(
             else:
                 actual_destinations.append(path[length_of_activated_path])
         assert all(map(remaining_rates.__contains__, activated_valves))
-        pressure_released = (MAX_TIME - t) * sum(map(remaining_rates.get, activated_valves))  # type: ignore
+        pressure_released = (max_time - t - minimum_distance) * sum(map(remaining_rates.get, activated_valves))  # type: ignore
         new_remaining = {k: v for k, v in remaining_rates.items() if k not in activated_valves}
-        subsequent_results.append(pressure_released + get_pressure_released_multiple_agents(actual_destinations, t+minimum_distance, new_remaining, path_map))
+        subsequent_results.append(pressure_released + get_pressure_released(actual_destinations, t+length_of_activated_path, new_remaining, max_time))
     return max(subsequent_results)
 
 
 @time_execution
-def part_1(raw_input: str) -> None:
-    distances, optimizable_flows_by_label = create_volcano_state(raw_input)
-    # print(distances)
-    # print(optimizable_flows_by_label)
-    utility = get_pressure_released('AA', 1, optimizable_flows_by_label, distances)
+def part_1() -> None:
+    utility = get_pressure_released(['AA'], 1, optimizable_flows_by_label, 30)
     print(f'part_1={utility}')
 
 
 if __name__ == '__main__':
-    raw_input = get_raw_input()
-    part_1(raw_input)
+    part_1()
