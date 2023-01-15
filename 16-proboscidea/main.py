@@ -6,7 +6,8 @@ from functools import cache
 import heapq
 import re
 import time
-from typing import TypeVar, ParamSpec, Callable
+from typing import TypeVar, ParamSpec, Callable, Literal
+
 
 T = TypeVar('T')
 P = ParamSpec('P')
@@ -18,7 +19,6 @@ def time_execution(f: Callable[P, T]) -> Callable[P, T]:
         print(f'{f.__name__} executed in {end-start:.5} s')
         return result
     return wrapped
-
 
 
 def get_raw_input() -> str:
@@ -153,7 +153,25 @@ def get_pressure_released_multiple_agents(
         paths: map[list[str] | None] = map(path_map.get, zipped_start_end)  # type: ignore
         calculate_distance = lambda t: get_distance(t[0], t[1], path_map)
         distances = map(calculate_distance, zipped_start_end)
-        minimum_distance = min(distances)
+        minimum_distance = int(min(distances))
+        length_of_activated_path = minimum_distance + 1
+        actual_destinations: list[str | None] = []
+        activated_valves: list[str] = []
+        # Step forward to next time an agent activates a valve. The other agents
+        # move as far as they can in that amount of elapsed time.
+        for path in paths:
+            if path is None:
+                actual_destinations.append(None)
+            elif len(path) == length_of_activated_path:
+                # Track the valves which get activated by the end of the step
+                actual_destinations.append(path[-1])
+                activated_valves.append(path[-1])
+            else:
+                actual_destinations.append(path[length_of_activated_path])
+        assert all(map(remaining_rates.__contains__, activated_valves))
+        pressure_released = (MAX_TIME - t) * sum(map(remaining_rates.get, activated_valves))  # type: ignore
+        new_remaining = {k: v for k, v in remaining_rates.items() if k not in activated_valves}
+        subsequent_results.append(pressure_released + get_pressure_released_multiple_agents(actual_destinations, t+minimum_distance, new_remaining, path_map))
     return max(subsequent_results)
 
 
