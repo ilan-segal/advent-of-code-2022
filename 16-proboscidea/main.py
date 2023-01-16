@@ -2,10 +2,12 @@
 https://adventofcode.com/2022/day/16
 """
 
+from functools import cache
 import heapq
 import re
 import time
 from typing import TypeVar, ParamSpec, Callable
+from tqdm import tqdm
 
 
 T = TypeVar('T')
@@ -16,18 +18,6 @@ def time_execution(f: Callable[P, T]) -> Callable[P, T]:
         result = f(*args, **kwargs)
         end = time.time()
         print(f'{f.__name__} executed in {end-start:.5} s')
-        return result
-    return wrapped
-
-
-def cache(f: Callable[P, T]) -> Callable[P, T]:
-    memo: dict[str, T] = dict()
-    def wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
-        key = str(args)+','+str(kwargs)
-        if key in memo:
-            return memo[key]
-        result = f(*args, **kwargs)
-        memo[key] = result
         return result
     return wrapped
 
@@ -78,14 +68,22 @@ def create_volcano_state(raw_input: str) -> tuple[PathMap, dict[str, int]]:
     return distances, optimizable_flows_by_label
 
 
-def get_non_repeating_product(l: list[T], n: int) -> list[tuple[T, ...]]:
+path_map, optimizable_flows_by_label = create_volcano_state(get_raw_input())
+QUIET = True
+def my_print(*values: object) -> None:
+    if not QUIET:
+        print(*values)
+
+
+@cache
+def get_non_repeating_product(l: tuple[T, ...], n: int) -> tuple[tuple[T, ...]]:
     """
     Returns l^n excluding tuples with repeated elements.
     """
     if n == 0:
-        return []
+        return tuple()
     if n == 1:
-        return [(el,) for el in l]
+        return tuple((el,) for el in l)
     sub_results = get_non_repeating_product(l, n-1)
     result: list[tuple[T, ...]] = []
     for sub_result in sub_results:
@@ -93,10 +91,11 @@ def get_non_repeating_product(l: list[T], n: int) -> list[tuple[T, ...]]:
             if el in sub_result and el is not None:
                 continue
             result.append(sub_result + (el,))
-    return result
+    return tuple(result)
 
 
-def get_distance(start: str | None, end: str | None, path_map: PathMap) -> int | float:
+@cache
+def get_distance(start: str | None, end: str | None) -> int | float:
     if start is None or end is None:
         return float('inf')
     if (start, end) not in path_map:
@@ -104,36 +103,45 @@ def get_distance(start: str | None, end: str | None, path_map: PathMap) -> int |
     return len(path_map[(start, end)]) - 1
 
 
-def get_minimum_distance(starts: list[str | None], ends: list[str | None], path_map: PathMap) -> int | float:
+@cache
+def get_minimum_distance(starts: list[str | None], ends: list[str | None]) -> int | float:
     zipped = zip(starts, ends)
-    distance = lambda t: get_distance(t[0], t[1], path_map)
+    distance = lambda t: get_distance(t[0], t[1])
     return min(map(distance, zipped))
 
 
-path_map, optimizable_flows_by_label = create_volcano_state(get_raw_input())
+cached_results: dict[tuple[str,...], int] = dict()
 
 
-@cache
 def get_pressure_released(
-    agent_current_valves: list[str | None],
-    t: int,
+    agent_current_valves: tuple[str | None, ...],
     remaining_rates: dict[str, int],
-    max_time: int) -> int:
+    remaining_time: int) -> int:
 
-    # print('#'*10)
-    # print(f'{agent_current_valves=}')
-    # print(f'{t=}')
-    # print(f'{remaining_rates=}')
+    key = (
+        tuple(sorted(map(str, agent_current_valves))), 
+        tuple(remaining_rates.keys()),
+        remaining_time,
+    )
+    if key in cached_results:
+        # print(f'Cache hit: {key} -> {cached_results[key]}')
+        return cached_results[key]
 
-    if t >= max_time or len(remaining_rates) == 0:
-        # print('shorting')
+    my_print('#'*10)
+    my_print(f'{agent_current_valves=}')
+    my_print(f'{remaining_rates=}')
+    my_print(f'{remaining_time=}')
+
+    if remaining_time <= 1 or len(remaining_rates) == 0:
+        my_print('shorting')
+        cached_results[key] = 0
         return 0
-    remaining_destinations = list(remaining_rates.keys())
-    num_destinations = len(remaining_rates)
+    remaining_destinations = tuple(remaining_rates.keys())
+    num_destinations = len(remaining_destinations)
     num_agents = len(agent_current_valves)
     if num_agents > num_destinations:
         # We have more agents than closed valves. Some agents will take a nap (current valve = None)
-        remaining_destinations = remaining_destinations + [None]*(num_agents - num_destinations)
+        remaining_destinations = remaining_destinations + (None,)*(num_agents - num_destinations)
     
     def napper_stays_napping(positions: tuple[str | None, str | None]) -> bool:
         return positions[0] is not None or positions[1] is None
@@ -143,21 +151,24 @@ def get_pressure_released(
     destination_permutations = list(set(destination_permutations))
     subsequent_results: list[int] = [0]
     for destinations in destination_permutations:
-        zipped_start_end = list(zip(agent_current_valves, destinations))
-        # print(f'{zipped_start_end=}')
-        nappers_stay_napping = map(napper_stays_napping, zipped_start_end)
+        zipped_start_end = tuple(zip(agent_current_valves, destinations))
+        nappers_stay_napping = map(napper_stays_napping, zipped_start_end)  # type: ignore
+        my_print(f'{destinations=}')
         if not all(nappers_stay_napping):
             # Don't wake them up!
-            # print('Dont wake em up')
+            my_print('Dont wake em up')
             continue
-        # print(f'{destinations=}')
         paths: list[list[str] | None] = list(map(path_map.get, zipped_start_end))  # type: ignore
-        # print(f'{paths=}')
-        calculate_distance = lambda t: get_distance(t[0], t[1], path_map)
+        my_print(f'{paths=}')
+        calculate_distance = lambda t: get_distance(t[0], t[1])
         distances = list(map(calculate_distance, zipped_start_end))
-        # print(f'{distances=}')
+        my_print(f'{distances=}')
+        if type(min(distances)) == float:
+            continue
         minimum_distance = int(min(distances))
-        length_of_activated_path = minimum_distance + 1
+        time_to_activate = minimum_distance + 1
+        if remaining_time - time_to_activate <= 0:
+            continue
         actual_destinations: list[str | None] = []
         activated_valves: list[str] = []
         # Step forward to next time an agent activates a valve. The other agents
@@ -165,24 +176,45 @@ def get_pressure_released(
         for path in paths:
             if path is None:
                 actual_destinations.append(None)
-            elif len(path) == length_of_activated_path:
+            elif len(path) == time_to_activate:
                 # Track the valves which get activated by the end of the step
                 actual_destinations.append(path[-1])
                 activated_valves.append(path[-1])
             else:
-                actual_destinations.append(path[length_of_activated_path])
+                actual_destinations.append(path[time_to_activate])
+        assert len(activated_valves) == len(set(activated_valves))
         assert all(map(remaining_rates.__contains__, activated_valves))
-        pressure_released = (max_time - t - minimum_distance) * sum(map(remaining_rates.get, activated_valves))  # type: ignore
+        pressure_released = (remaining_time - time_to_activate) * sum(map(remaining_rates.get, activated_valves))  # type: ignore
         new_remaining = {k: v for k, v in remaining_rates.items() if k not in activated_valves}
-        subsequent_results.append(pressure_released + get_pressure_released(actual_destinations, t+length_of_activated_path, new_remaining, max_time))
-    return max(subsequent_results)
+        if len(new_remaining) > 0 and remaining_time - time_to_activate > 1:
+            pressure_released += get_pressure_released(
+                tuple(d for d in actual_destinations if d is not None),
+                new_remaining,
+                remaining_time - time_to_activate,
+            )
+        subsequent_results.append(pressure_released)
+    result = max(subsequent_results)
+    my_print(f'{result=}')
+    cached_results[key] = result
+    return result
 
 
 @time_execution
 def part_1() -> None:
-    utility = get_pressure_released(['AA'], 1, optimizable_flows_by_label, 30)
+    utility = get_pressure_released(('AA',), optimizable_flows_by_label, 30)
     print(f'part_1={utility}')
+
+
+@time_execution
+def part_2() -> None:
+    # Populate the cache for minimal recursive calls
+    MAX_TIME = 26
+    # for max_time in tqdm(range(1, MAX_TIME)):
+    #     get_pressure_released(('AA', 'AA'), optimizable_flows_by_label, max_time)
+    utility = get_pressure_released(('AA', 'AA'), optimizable_flows_by_label, MAX_TIME)
+    print(f'part_2={utility}')
 
 
 if __name__ == '__main__':
     part_1()
+    part_2()
