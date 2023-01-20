@@ -2,7 +2,6 @@
 https://adventofcode.com/2022/day/18
 """
 
-from __future__ import annotations
 import time
 from typing import TypeVar, ParamSpec, Callable
 import heapq
@@ -64,13 +63,20 @@ def manhattan_distance(a: Coordinates, b: Coordinates) -> int:
     return sum(map(lambda p: abs(p[0] - p[1]), zip(a, b)))
 
 
+proven_outside_points: set[Coordinates] = set()
+proven_inside_points: set[Coordinates] = set()
 def resolve_path(start: Coordinates, end: Coordinates, obstacles: set[Coordinates]) -> list[Coordinates]:
     paths: list[tuple[int, list[Coordinates]]] = []
     seen_coords: set[Coordinates] = set()
     heapq.heappush(paths, (manhattan_distance(start, end), [start]))
     while len(paths) > 0:
         cur_path_length, cur_path = heapq.heappop(paths)
+        if cur_path[-1] in proven_outside_points:
+            return cur_path + [end]
+        if cur_path[-1] in proven_inside_points:
+            return []
         if cur_path[-1] == end:
+            proven_outside_points.add(start)
             return cur_path
         for next_label in get_neighbors(cur_path[-1]):
             if next_label in cur_path or next_label in obstacles or next_label in seen_coords:
@@ -81,6 +87,7 @@ def resolve_path(start: Coordinates, end: Coordinates, obstacles: set[Coordinate
                 cur_path + [next_label],
             ))
             seen_coords.add(next_label)
+    proven_inside_points.add(start)
     return []
 
 
