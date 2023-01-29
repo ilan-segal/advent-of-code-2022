@@ -18,13 +18,13 @@ using any particular material as:
 Then for minutes t ∈ {1, 2, ..., 23} we want to track the following variables:
 
     -> A(r,t) where r ∈ R
-        1 if a robot of type r was made after t, 0 otherwise.
+        1 if a robot of type r was made during minute t, 0 otherwise.
 
     -> N(r,t) where r ∈ R
-        Number of robots of type r after t.
+        Number of robots of type r before minute t elapses.
 
     -> Q(m,t) where m ∈ M
-        Number of material m after t.
+        Number of material m before minute t elapses.
 
 We have the following constraints for each minute t:
 
@@ -121,72 +121,77 @@ def get_blueprints(raw_input: str) -> list[Blueprint]:
 
 from pulp import LpMaximize, LpProblem, lpSum, LpVariable, LpAffineExpression
 
-class HashableExpression(LpAffineExpression):
-    def __init__(self, e=None, constant=0, name=None):
-        super().__init__(e, constant, name)
-        self.hash = hash(self)
-        self.cat = 'Integer'
-    def asCplexLpVariable(self) -> str:
-        return str(self)
-    def __hash__(self) -> int:
-        return hash(repr(self))
+
+class LpMatrix:
+    """
+    Represents a time series of values across different material types.
+    """
+
+    _rows: int
+    _cols: int
+    _terms: list[list[LpVariable | LpAffineExpression | int]]
+
+    def __init__(self, num_materials: int, num_t: int) -> None:
+        self._rows = num_materials
+        self._cols = num_t
+        self._terms = [[None for _ in range(num_t)] for _ in range(num_materials)]  # type: ignore
+
+    def __getitem__(self, index: tuple[MaterialType, int]) -> LpVariable | LpAffineExpression | int:
+        # print(f'{index=}')
+        material, t = index
+        r = R.index(material)
+        return self._terms[r][t-1]
+
+    def __setitem__(self,  index: tuple[MaterialType, int], value: LpVariable | LpAffineExpression | int) -> None:
+        material, t = index
+        r = R.index(material)
+        self._terms[r][t-1] = value
 
 
 def get_optimal_geodes(blueprint: Blueprint) -> int:
-    model = LpProblem(name=f'blueprint-{blueprint.id}', sense=LpMaximize)
+    problem = LpProblem(name=f'blueprint-{blueprint.id}', sense=LpMaximize)
     T_RANGE = range(1, 24)
     # Variables
     C = blueprint.cost
-    A = {
-        r: [
-            # Constraints baked in
-            LpVariable(name=f'A_{r}_{t}', cat='Binary')
-            for t in T_RANGE
-        ]
-        for r in R
-    }
-    print(A)
-    # TODO: This hashing doesn't work
-    N = {
-        r: [
-            HashableExpression([(A[r][t_prime-1], 1) for t_prime in range(1,t)], name=f'N_{r}_{t}')
-            for t in T_RANGE
-        ]
-        for r in R
-    }
-    print(N)
-    Q = {
-        m: [
-            HashableExpression(
-                [(N[m][t_prime-1], (t - t_prime)) for t_prime in range(1,t)]
-                +
-                [(A[r][t_prime-1], (-1 * C.get(r, dict()).get(m, 0))) for t_prime in range(1,t) for r in R]
-            , name=f'Q_{m}_{t}')
-            for t in T_RANGE
-        ]
-        for m in M
-    }
+    A = LpMatrix(len(R), len(T_RANGE))
+    for r in R:
+        for t in T_RANGE:
+            # print(f'Assigning {r=} {t=}')
+            A[r, t] = LpVariable(name=f'A_{r}_t_{t:02}', cat='Binary')
+    N = LpMatrix(len(R), len(T_RANGE))
+    for r in R:
+        for t in T_RANGE:
+            if t == 1:
+                if r == 'Ore':
+                    N[r, t] = 1
+                else:
+                    N[r, t] = 0
+            else:
+                N[r, t] = lpSum(A[r, t_prime] for t_prime in range(1,t))
+            # if r == 'Ore' and t == 1:
+            #     N[r, t] += 1
     # Constraints
     for t in T_RANGE:
-        print(f'{t=}')
-        model += (sum(A[r][t-1] for r in R) <= 1, f'at_most_one_robot_at_t_{t}')
+        problem += (sum(A[r, t] for r in R) <= 1, f'at_most_one_robot_at_t_{t:02}')
         for m in M:
-            model += (
-                            HashableExpression(
-                [(N[m][t_prime-1], (t - t_prime)) for t_prime in range(1,t)]
-                +
-                [(A[r][t_prime-1], (-1 * C.get(r, dict()).get(m, 0))) for t_prime in range(1,t) for r in R]
-            , name=f'Q_{m}_{t}'),
-                f'constrain_{m}_at_t_{t}'
+            Q_m_t = (
+                lpSum(N[m, t_prime] * (t - t_prime) for t_prime in range(1,t))
+                -
+                lpSum(A[r, t_prime] * C.get(r, dict()).get(m, 0) for t_prime in range(1,t) for r in R)
             )
-    print(repr(model))
+            problem += (
+                0 <= Q_m_t, f'constrain_{m}_at_t_{t:02}'
+            )
+    problem.setObjective(lpSum(N['Geode', t] * (len(T_RANGE) - t + 1) for t in T_RANGE))
+    print(repr(problem))
     # TODO
-    result = model.solve()
-    print(result)
-    return -1
+    result: int = problem.solve()
+    for v in problem.variables():
+        print(f'{v}={v.value()}')
+    return problem.objective.value()  # type: ignore
 
 if __name__ == '__main__':
     raw_input = get_raw_input()
-    for blueprint in get_blueprints(raw_input):
+    for blueprint in get_blueprints(raw_input)[:1]:
         print(blueprint)
-        get_optimal_geodes(blueprint)
+        print(get_optimal_geodes(blueprint))
