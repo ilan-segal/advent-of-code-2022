@@ -55,8 +55,9 @@ objective function. Speaking of, our objective function is this:
 """
 
 from dataclasses import dataclass
+import re
 import time
-from typing import TypeVar, ParamSpec, Callable
+from typing import TypeVar, ParamSpec, Callable, Literal
 
 T = TypeVar('T')
 P = ParamSpec('P')
@@ -74,16 +75,117 @@ def get_raw_input() -> str:
     return open('19-minerals/input.txt', 'r').read().strip().replace('\r\n', '\n')
 
 
-M = ['Ore', 'Clay', 'Obsidian']
-R = ['Ore', 'Clay', 'Obsidian', 'Geode']
-MATERIAL_TO_INDEX = {r: R.index(r) for r in R}
+
+MaterialType = Literal['Ore', 'Clay', 'Obsidian', 'Geode']
+CostDict = dict[MaterialType, dict[MaterialType, int]]
+
+
+M: list[MaterialType] = ['Ore', 'Clay', 'Obsidian']
+R: list[MaterialType] = ['Ore', 'Clay', 'Obsidian', 'Geode']
 
 
 @dataclass
 class Blueprint:
     id: int
-    cost: dict[str, dict[str, int]]
+    cost: CostDict
 
 
 def get_blueprint(raw_input_line: str) -> Blueprint:
-    raw_input_line = raw_input_line.replace('\n\n', ' ')
+    raw_input_line = ' '.join(raw_input_line.split())
+    pattern = r'Blueprint (\d+): Each ore robot costs (\d+) ore. Each clay robot costs (\d+) ore. Each obsidian robot costs (\d+) ore and (\d+) clay. Each geode robot costs (\d+) ore and (\d+) obsidian.'
+    result = re.search(pattern, raw_input_line)
+    assert result is not None, f'Invalid string {raw_input_line} for pattern {pattern}'
+    get_group = lambda group_num: int(result.group(group_num))
+    blueprint_id = get_group(1)
+    cost: CostDict = {
+        'Ore': {'Ore': get_group(2)},
+        'Clay': {'Ore': get_group(3)},
+        'Obsidian': {
+            'Ore': get_group(4),
+            'Clay': get_group(5),
+        },
+        'Geode': {
+            'Ore': get_group(6),
+            'Obsidian': get_group(7),
+        },
+    }
+    return Blueprint(blueprint_id, cost)
+
+
+def get_blueprints(raw_input: str) -> list[Blueprint]:
+    inputs = raw_input.split('Blueprint')
+    inputs = filter(len, inputs)
+    inputs = map(lambda s: 'Blueprint' + s, inputs)
+    return list(map(get_blueprint, inputs))
+
+
+from pulp import LpMaximize, LpProblem, lpSum, LpVariable, LpAffineExpression
+
+class HashableExpression(LpAffineExpression):
+    def __init__(self, e=None, constant=0, name=None):
+        super().__init__(e, constant, name)
+        self.hash = hash(self)
+        self.cat = 'Integer'
+    def asCplexLpVariable(self) -> str:
+        return str(self)
+    def __hash__(self) -> int:
+        return hash(repr(self))
+
+
+def get_optimal_geodes(blueprint: Blueprint) -> int:
+    model = LpProblem(name=f'blueprint-{blueprint.id}', sense=LpMaximize)
+    T_RANGE = range(1, 24)
+    # Variables
+    C = blueprint.cost
+    A = {
+        r: [
+            # Constraints baked in
+            LpVariable(name=f'A_{r}_{t}', cat='Binary')
+            for t in T_RANGE
+        ]
+        for r in R
+    }
+    print(A)
+    N = {
+        r: [
+            HashableExpression([(A[r][t_prime-1], 1) for t_prime in range(1,t)], name=f'N_{r}_{t}')
+            for t in T_RANGE
+        ]
+        for r in R
+    }
+    print(N)
+    Q = {
+        m: [
+            HashableExpression(
+                [(N[m][t_prime-1], (t - t_prime)) for t_prime in range(1,t)]
+                +
+                [(A[r][t_prime-1], (-1 * C.get(r, dict()).get(m, 0))) for t_prime in range(1,t) for r in R]
+            , name=f'Q_{m}_{t}')
+            for t in T_RANGE
+        ]
+        for m in M
+    }
+    # Constraints
+    for t in T_RANGE:
+        print(f'{t=}')
+        model += (sum(A[r][t-1] for r in R) <= 1, f'at_most_one_robot_at_t_{t}')
+        for m in M:
+            model += (
+                            HashableExpression(
+                [(N[m][t_prime-1], (t - t_prime)) for t_prime in range(1,t)]
+                +
+                [(A[r][t_prime-1], (-1 * C.get(r, dict()).get(m, 0))) for t_prime in range(1,t) for r in R]
+            , name=f'Q_{m}_{t}'),
+                f'constrain_{m}_at_t_{t}'
+            )
+    print(repr(model))
+    # TODO
+    result = model.solve()
+    print(result)
+    return -1
+
+if __name__ == '__main__':
+    raw_input = get_raw_input()
+    for blueprint in get_blueprints(raw_input):
+        print(blueprint)
+        get_optimal_geodes(blueprint)
