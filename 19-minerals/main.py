@@ -146,6 +146,7 @@ def get_optimal_geodes(blueprint: Blueprint) -> int:
         for r in R
     }
     print(A)
+    # TODO: This hashing doesn't work
     N = {
         r: [
             HashableExpression([(A[r][t_prime-1], 1) for t_prime in range(1,t)], name=f'N_{r}_{t}')
