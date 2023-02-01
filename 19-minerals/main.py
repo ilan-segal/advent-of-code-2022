@@ -168,7 +168,7 @@ def get_optimal_geodes(blueprint: Blueprint, max_mins: int) -> int:
             N[r, t] = lpSum(A[r, t_prime] for t_prime in range(1,t))
             if r == 'Ore':
                 N[r, t] += 1
-            print(f'{t=} {r=} {N[r, t]=}\n')
+            # print(f'{t=} {r=} {N[r, t]=}\n')
     # Constraints
     for t in T_RANGE:
         problem += (sum(A[r, t] for r in R) <= 1, f'at_most_one_robot_at_t_{t:02}')
@@ -179,20 +179,23 @@ def get_optimal_geodes(blueprint: Blueprint, max_mins: int) -> int:
                 -
                 lpSum(A[r, t_prime] * blueprint.get_cost(r, m) for t_prime in range(1,t+1) for r in R)
             )
-            print(f'{t=} {m=} {Q_m_t=}\n')
+            # print(f'{t=} {m=} {Q_m_t=}\n')
             problem += (0 <= Q_m_t, f'constrain_{m}_at_t_{t:02}')
     problem.setObjective(lpSum(N['Geode', t] for t in range(1, max_mins+1)))
     problem.solve()
-    for v in problem.variables():
-        print(f'{v}={v.value()}')
+    # for v in problem.variables():
+    #     print(f'{v}={v.value()}')
     return problem.objective.value()  # type: ignore
 
 if __name__ == '__main__':
     raw_input = get_raw_input()
-    outputs: dict[int, int] = dict()
-    for blueprint in get_blueprints(raw_input):
-        print(blueprint)
+    part_1_aggregate = 0
+    blueprints = get_blueprints(raw_input)
+    for blueprint in blueprints:
         v = get_optimal_geodes(blueprint, 24)
-        outputs[blueprint.id] = int(v)
-    quality_level = sum(k*v for k,v in outputs.items())
-    print(f'part_1={quality_level}')
+        part_1_aggregate += blueprint.id * v
+    part_2_aggregate = 1
+    for blueprint in blueprints[:3]:
+        part_2_aggregate *= get_optimal_geodes(blueprint, 32)
+    print(f'part_1={part_1_aggregate}')
+    print(f'part_2={part_2_aggregate}')
