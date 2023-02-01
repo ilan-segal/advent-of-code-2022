@@ -22,15 +22,17 @@ Then for minutes t ∈ {1, 2, ..., 23} we want to track the following variables:
 
     -> N(r,t) where r ∈ R
         Number of robots of type r before minute t elapses.
+        N(r,t) = ∑_(t'<t) A(r,t')
 
     -> Q(m,t) where m ∈ M
-        Number of material m before minute t elapses.
+        Number of material m before materials are mined during minute t, but
+        after any robots begin construction during that same minute.
+        Q(m,t) = [∑_(t'<t) N(m,t')*(t-t')] - [∑_(t'<t) ∑_r A(r,t')*C(r,m)]
 
 We have the following constraints for each minute t:
 
     For each r ∈ R:     0 <= A(r,t) <= 1                        (4 constraints)
                         0 <= ∑_r A(r,t) <= 1                    (1 constraint)
-    For each r ∈ R:     0 <= N(r,t) - ∑_(t'<t) A(r,t') <= 0     (4 constraints)
 
 We also have to constrain Q(m,t) as follows:
 
@@ -40,7 +42,7 @@ We also have to constrain Q(m,t) as follows:
 We can skip the definition of Q(m,t) entirely and cut straight to this constraint
 on A(r,t) and N(r,t):
 
-    For each m ∈ M:     0 <= [∑_(t'<t) N(m,t')*(t-t')] - [∑_(t'<t) ∑_r A(r,t')*C(r,m)]  (3 constraints)
+    For each m ∈ M:     0 <= [∑_(t'<t) N(m,t')*(t-t')] - [∑_(t'<=t) ∑_r A(r,t')*C(r,m)]  (3 constraints)
 
 Thus we count the number of variables and constraints:
 
@@ -88,6 +90,9 @@ R: list[MaterialType] = ['Ore', 'Clay', 'Obsidian', 'Geode']
 class Blueprint:
     id: int
     cost: CostDict
+
+    def get_cost(self, robot: MaterialType, material: MaterialType) -> int:
+        return self.cost.get(robot, dict()).get(material, 0)
 
 
 def get_blueprint(raw_input_line: str) -> Blueprint:
@@ -148,50 +153,46 @@ class LpMatrix:
         self._terms[r][t-1] = value
 
 
-def get_optimal_geodes(blueprint: Blueprint) -> int:
+def get_optimal_geodes(blueprint: Blueprint, max_mins: int) -> int:
     problem = LpProblem(name=f'blueprint-{blueprint.id}', sense=LpMaximize)
-    T_RANGE = range(1, 24)
+    max_mins = max_mins+1
+    T_RANGE = range(1, max_mins)
     # Variables
-    C = blueprint.cost
-    A = LpMatrix(len(R), len(T_RANGE))
+    A = LpMatrix(len(R), max_mins)
     for r in R:
         for t in T_RANGE:
-            # print(f'Assigning {r=} {t=}')
-            A[r, t] = LpVariable(name=f'A_{r}_t_{t:02}', cat='Binary')
-    N = LpMatrix(len(R), len(T_RANGE))
+            A[r, t] = LpVariable(name=f'r_{r}_at_t_{t:02}', cat='Binary')
+    N = LpMatrix(len(R), max_mins)
     for r in R:
         for t in T_RANGE:
-            if t == 1:
-                if r == 'Ore':
-                    N[r, t] = 1
-                else:
-                    N[r, t] = 0
-            else:
-                N[r, t] = lpSum(A[r, t_prime] for t_prime in range(1,t))
-            # if r == 'Ore' and t == 1:
-            #     N[r, t] += 1
+            N[r, t] = lpSum(A[r, t_prime] for t_prime in range(1,t))
+            if r == 'Ore':
+                N[r, t] += 1
+            print(f'{t=} {r=} {N[r, t]=}\n')
     # Constraints
     for t in T_RANGE:
         problem += (sum(A[r, t] for r in R) <= 1, f'at_most_one_robot_at_t_{t:02}')
-        for m in M:
+    for m in M:
+        for t in T_RANGE:
             Q_m_t = (
-                lpSum(N[m, t_prime] * (t - t_prime) for t_prime in range(1,t))
+                lpSum(N[m, t_prime] for t_prime in range(1,t))
                 -
-                lpSum(A[r, t_prime] * C.get(r, dict()).get(m, 0) for t_prime in range(1,t) for r in R)
+                lpSum(A[r, t_prime] * blueprint.get_cost(r, m) for t_prime in range(1,t+1) for r in R)
             )
-            problem += (
-                0 <= Q_m_t, f'constrain_{m}_at_t_{t:02}'
-            )
-    problem.setObjective(lpSum(N['Geode', t] * (len(T_RANGE) - t + 1) for t in T_RANGE))
-    print(repr(problem))
-    # TODO
-    result: int = problem.solve()
+            print(f'{t=} {m=} {Q_m_t=}\n')
+            problem += (0 <= Q_m_t, f'constrain_{m}_at_t_{t:02}')
+    problem.setObjective(lpSum(N['Geode', t] for t in range(1, max_mins+1)))
+    problem.solve()
     for v in problem.variables():
         print(f'{v}={v.value()}')
     return problem.objective.value()  # type: ignore
 
 if __name__ == '__main__':
     raw_input = get_raw_input()
-    for blueprint in get_blueprints(raw_input)[:1]:
+    outputs: dict[int, int] = dict()
+    for blueprint in get_blueprints(raw_input):
         print(blueprint)
-        print(get_optimal_geodes(blueprint))
+        v = get_optimal_geodes(blueprint, 24)
+        outputs[blueprint.id] = int(v)
+    quality_level = sum(k*v for k,v in outputs.items())
+    print(f'part_1={quality_level}')
