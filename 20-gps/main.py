@@ -107,11 +107,12 @@ class Ring(Generic[T], Iterable[T]):
               
 class MixableRing(Ring[int]):
 
-    def mix(self) -> None:
+    def mix(self, n: int = 1) -> None:
         nodes = self._get_nodes()
         # print(self)
-        for node in nodes:
-            self.__move_node(node)
+        for _ in range(n):
+            for node in nodes:
+                self.__move_node(node)
             # print(self)
 
     def __move_node(self, node: Node[int]) -> None:
