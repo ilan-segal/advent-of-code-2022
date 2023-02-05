@@ -95,7 +95,7 @@ class Ring(Generic[T], Iterable[T]):
         return iter(self._get_values())
 
     def _get_from_offset(self, node: Node[T], offset: int) -> Node[T]:
-        distance = abs(offset) % self.count
+        distance = abs(offset) #% self.count
         if distance == 0:
             return node
         for _ in range(distance):
