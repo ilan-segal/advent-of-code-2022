@@ -104,6 +104,7 @@ class Ring(Generic[T], Iterable[T]):
             node = next_node
         return node
         
+
               
 class MixableRing(Ring[int]):
 
@@ -146,12 +147,24 @@ class MixableRing(Ring[int]):
         return tuple(self._get_from_offset(zero_node, offset).value for offset in [1000, 2000, 3000])
 
 
+@time_execution
+def part_1(values: list[int]) -> None:
+    linked_list = MixableRing(values)
+    linked_list.mix()
+    print(f'part_1={sum(linked_list.get_coordinates())}')
+
+
+@time_execution
+def part_2(values: list[int]) -> None:
+    KEY = 811589153
+    values = [v * KEY for v in values]
+    linked_list = MixableRing(values)
+    linked_list.mix(10)
+    print(f'part_2={sum(linked_list.get_coordinates())}')
+
+
 if __name__ == '__main__':
     raw_input = get_raw_input()
     values = get_values(raw_input)
-    linked_list = MixableRing(values)
-    orig_sorted = sorted(linked_list)
-    linked_list.mix()
-    new_sorted = sorted(linked_list)
-    print(f'{orig_sorted==new_sorted}')
-    print(f'part_1={sum(linked_list.get_coordinates())}')
+    part_1(values)
+    part_2(values)
