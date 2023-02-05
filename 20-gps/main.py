@@ -45,7 +45,7 @@ class Node(Generic[T]):
         return id(__o) == id(self)
 
 
-class Ring(Generic[T]):
+class Ring(Generic[T], Iterable[T]):
     head: Node[T] | None = None
     count: int = 0
 
@@ -91,15 +91,17 @@ class Ring(Generic[T]):
     def __len__(self) -> int:
         return len(self._get_nodes())
 
+    def __iter__(self) -> Iterable[T]:
+        return iter(self._get_values())
+
     def _get_from_offset(self, node: Node[T], offset: int) -> Node[T]:
         distance = abs(offset) % self.count
         if distance == 0:
             return node
         for _ in range(distance):
-            if offset < 0:
-                node = node.prev  # type: ignore
-            else:
-                node = node.next  # type: ignore
+            next_node = node.prev if offset < 0 else node.next
+            assert next_node is not None
+            node = next_node
         return node
         
               
@@ -120,14 +122,14 @@ class MixableRing(Ring[int]):
         prev_node = node.prev
         next_node = node.next
         assert prev_node is not None and next_node is not None
-        new_prev_node = self._get_from_offset(node, node.value)
-        if new_prev_node == node.prev:
-            return
-        if node.value < 0:
-            new_prev_node = new_prev_node.prev
-        # Close hole where node used to be
+        # Close hole left by moved node
         prev_node.next = next_node
         next_node.prev = prev_node
+        new_prev_node = self._get_from_offset(node, node.value)
+        if node.value < 0:
+            new_prev_node = new_prev_node.prev
+        if new_prev_node == node.prev:
+            return
         # Insert node at new position
         assert new_prev_node is not None
         self._insert(node, new_prev_node)
@@ -147,7 +149,8 @@ if __name__ == '__main__':
     raw_input = get_raw_input()
     values = get_values(raw_input)
     linked_list = MixableRing(values)
-    print(f'{len(linked_list)=}')
+    orig_sorted = sorted(linked_list)
     linked_list.mix()
-    print(f'{len(linked_list)=}')
+    new_sorted = sorted(linked_list)
+    print(f'{orig_sorted==new_sorted}')
     print(f'part_1={sum(linked_list.get_coordinates())}')
