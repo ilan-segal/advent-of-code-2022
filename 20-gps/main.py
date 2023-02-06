@@ -95,7 +95,7 @@ class Ring(Generic[T], Iterable[T]):
         return iter(self._get_values())
 
     def _get_from_offset(self, node: Node[T], offset: int) -> Node[T]:
-        distance = abs(offset) #% self.count
+        distance = abs(offset) % self.count
         if distance == 0:
             return node
         for _ in range(distance):
@@ -127,6 +127,7 @@ class MixableRing(Ring[int]):
         # Close hole left by moved node
         prev_node.next = next_node
         next_node.prev = prev_node
+        self.count -= 1
         new_prev_node = self._get_from_offset(node, node.value)
         if node.value < 0:
             new_prev_node = new_prev_node.prev
@@ -135,6 +136,7 @@ class MixableRing(Ring[int]):
         # Insert node at new position
         assert new_prev_node is not None
         self._insert(node, new_prev_node)
+        self.count += 1
 
     def get_coordinates(self) -> tuple[int, int, int]:
         zero_node = self.head
