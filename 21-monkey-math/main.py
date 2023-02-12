@@ -103,7 +103,7 @@ class OperatorMonkey(Monkey):
     def __init__(self, name: str, operator_symbol: OperatorSymbol, dependency_names: list[str]) -> None:
         super().__init__(name)
         self.__operator_symbol = operator_symbol
-        self.__operator = _SYMBOL_TO_OPERATOR[operator_symbol]
+        self.__operator = get_operator(operator_symbol)
         self.__dependency_names = dependency_names
 
     def evaluate(self) -> int:
