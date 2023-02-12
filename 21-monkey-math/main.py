@@ -32,27 +32,56 @@ def get_raw_input() -> str:
 
 
 OperatorSymbol = Literal['+', '-', '*', '/']
-SYMBOL_TO_OPERATOR: dict[OperatorSymbol, Callable[[int, int], int]] = {
+BinaryOperator = Callable[[int, int], int]
+_SYMBOL_TO_OPERATOR: dict[OperatorSymbol, BinaryOperator] = {
     '+': lambda x, y: x + y,
     '-': lambda x, y: x - y,
     '*': lambda x, y: x * y,
     '/': lambda x, y: x // y,
 }
+_SYMBOL_TO_INVERSE: dict[OperatorSymbol, BinaryOperator] = {
+    '+': _SYMBOL_TO_OPERATOR['-'],
+    '-': _SYMBOL_TO_OPERATOR['+'],
+    '*': _SYMBOL_TO_OPERATOR['/'],
+    '/': _SYMBOL_TO_OPERATOR['*'],
+}
 
 
-NAME_TO_MONKEY_MAP: dict[str, Monkey] = dict()
+def get_operator(symbol: OperatorSymbol) -> BinaryOperator:
+    if symbol not in _SYMBOL_TO_OPERATOR:
+        raise ValueError(f'Invalid symbol "{symbol}", must be one of {list(_SYMBOL_TO_OPERATOR.keys())}')
+    return _SYMBOL_TO_OPERATOR[symbol]
+
+
+def get_inverse_operator(symbol: OperatorSymbol) -> BinaryOperator:
+    if symbol not in _SYMBOL_TO_INVERSE:
+        raise ValueError(f'Invalid symbol "{symbol}", must be one of {list(_SYMBOL_TO_INVERSE.keys())}')
+    return _SYMBOL_TO_INVERSE[symbol]
 
 
 class Monkey:
+
+    __name_to_monkey_map: dict[str, Monkey] = dict()
+
     def __init__(self, name: str) -> None:
         self.name = name
-        NAME_TO_MONKEY_MAP[self.name] = self
+        Monkey.__name_to_monkey_map[name] = self
 
     def evaluate(self) -> int:
         raise NotImplementedError
 
     def __repr__(self) -> str:
         raise NotImplementedError
+
+    @classmethod
+    def get_monkey(cls, name: str) -> Monkey:
+        return cls.__name_to_monkey_map[name]
+
+    @classmethod
+    def initialize(cls) -> None:
+        for monkey in cls.__name_to_monkey_map.values():
+            del monkey
+        cls.__name_to_monkey_map.clear()
 
 
 class ConstantMonkey(Monkey):
@@ -71,11 +100,11 @@ class OperatorMonkey(Monkey):
     def __init__(self, name: str, operator_symbol: OperatorSymbol, dependency_names: list[str]) -> None:
         super().__init__(name)
         self.__operator_symbol = operator_symbol
-        self.__operator = SYMBOL_TO_OPERATOR[operator_symbol]
+        self.__operator = _SYMBOL_TO_OPERATOR[operator_symbol]
         self.__dependency_names = dependency_names
 
     def evaluate(self) -> int:
-        dependencies = [NAME_TO_MONKEY_MAP[name] for name in self.__dependency_names]
+        dependencies = [Monkey.get_monkey(name) for name in self.__dependency_names]
         evaluated_dependencies = [monkey.evaluate() for monkey in dependencies]
         return functools.reduce(self.__operator, evaluated_dependencies)
 
@@ -100,15 +129,15 @@ def parse_monkey(monkey_str: str) -> Monkey:
     raise ValueError(monkey_str)
 
 
-def get_monkeys(raw_input: str) -> list[Monkey]:
+def initialize_monkeys(raw_input: str) -> list[Monkey]:
+    Monkey.initialize()
     return list(map(parse_monkey, raw_input.split('\n')))
 
 
 @time_execution
 def part_1(raw_input: str) -> None:
-    NAME_TO_MONKEY_MAP.clear()
-    get_monkeys(raw_input)
-    print(f'part_1={NAME_TO_MONKEY_MAP["root"].evaluate()}')
+    initialize_monkeys(raw_input)
+    print(f'part_1={Monkey.get_monkey("root").evaluate()}')
 
 
 if __name__ == '__main__':
