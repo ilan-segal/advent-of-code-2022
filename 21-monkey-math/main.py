@@ -10,6 +10,7 @@ from typing import (
     TypeVar,
 )
 
+import abc
 import functools
 import re
 import time
@@ -59,7 +60,7 @@ def get_inverse_operator(symbol: OperatorSymbol) -> BinaryOperator:
     return _SYMBOL_TO_INVERSE[symbol]
 
 
-class Monkey:
+class Monkey(abc.ABC):
 
     __name_to_monkey_map: dict[str, Monkey] = dict()
 
@@ -67,11 +68,13 @@ class Monkey:
         self.name = name
         Monkey.__name_to_monkey_map[name] = self
 
+    @abc.abstractmethod
     def evaluate(self) -> int:
-        raise NotImplementedError
+        pass
 
+    @abc.abstractmethod
     def __repr__(self) -> str:
-        raise NotImplementedError
+        pass
 
     @classmethod
     def get_monkey(cls, name: str) -> Monkey:
