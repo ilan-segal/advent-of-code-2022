@@ -11,6 +11,7 @@ from typing import (
 )
 
 import abc
+import dataclasses
 import functools
 import re
 import time
@@ -46,6 +47,7 @@ _SYMBOL_TO_INVERSE: dict[OperatorSymbol, BinaryOperator] = {
     '*': _SYMBOL_TO_OPERATOR['/'],
     '/': _SYMBOL_TO_OPERATOR['*'],
 }
+HUMAN_NAME = 'humn'
 
 
 def get_operator(symbol: OperatorSymbol) -> BinaryOperator:
@@ -60,7 +62,60 @@ def get_inverse_operator(symbol: OperatorSymbol) -> BinaryOperator:
     return _SYMBOL_TO_INVERSE[symbol]
 
 
-class Monkey(abc.ABC):
+@dataclasses.dataclass
+class Binomial:
+    """
+    ax+b
+    """
+
+    a: float
+    b: float
+
+    def evaluate(self, *, x: float) -> float:
+        return (self.a * x) + self.b
+    
+    def is_constant(self) -> bool:
+        return self.a == 0
+
+    def __repr__(self) -> str:
+        if self.a == 0:
+            multiplication_part = ''
+        else:
+            multiplication_part = f'{self.a}x'
+        if self.b == 0:
+            addition_part = ''
+        elif self.b > 0:
+            addition_part = f'+{self.b}'
+        else:
+            addition_part = f'{self.b}'
+        result = f'{multiplication_part}{addition_part}'
+        if result.startswith('+'):
+            result = result[1:]
+        if result.startswith('1x'):
+            result = result[1:]
+        return result
+
+    def __add__(self, other: Binomial) -> Binomial:
+        return Binomial(self.a + other.a, self.b + other.b)
+
+    def __sub__(self, other: Binomial) -> Binomial:
+        return Binomial(self.a - other.a, self.b - other.b)
+
+    def __mul__(self, other: Binomial) -> Binomial:
+        if not (self.is_constant() or other.is_constant()):
+            raise ValueError(f'Cannot multiply two binomials')
+        if self.is_constant():
+            return Binomial(other.a * self.b, other.b * self.b)
+        else:
+            return Binomial(self.a * other.b, self.b * other.b)
+
+    def __floordiv__(self, other: Binomial) -> Binomial:
+        if not other.is_constant():
+            raise ValueError('Cannot divide by binomial')
+        return Binomial(self.a / other.b, self.b / other.b)
+
+
+class Monkey(metaclass=abc.ABCMeta):
 
     __name_to_monkey_map: dict[str, Monkey] = dict()
 
@@ -76,9 +131,17 @@ class Monkey(abc.ABC):
     def __repr__(self) -> str:
         pass
 
+    @abc.abstractmethod
+    def to_expression(self, variable_name: str) -> Binomial:
+        pass
+
     @classmethod
     def get_monkey(cls, name: str) -> Monkey:
         return cls.__name_to_monkey_map[name]
+
+    @classmethod
+    def get_all_monkeys(cls) -> list[Monkey]:
+        return list(cls.__name_to_monkey_map.values())
 
     @classmethod
     def initialize(cls) -> None:
@@ -90,29 +153,43 @@ class Monkey(abc.ABC):
 class ConstantMonkey(Monkey):
     def __init__(self, name: str, constant: int) -> None:
         super().__init__(name)
-        self.__constant = constant
+        self.constant = constant
 
     def evaluate(self) -> int:
-        return self.__constant
+        return self.constant
+
+    def to_expression(self, variable_name: str) -> Binomial:
+        if self.name == variable_name:
+            return Binomial(1, 0)
+        return Binomial(0, self.constant)
 
     def __repr__(self) -> str:
-        return f'{self.name}: {self.__constant}'
+        return f'{self.name}: {self.constant}'
 
 
 class OperatorMonkey(Monkey):
     def __init__(self, name: str, operator_symbol: OperatorSymbol, dependency_names: list[str]) -> None:
         super().__init__(name)
-        self.__operator_symbol = operator_symbol
-        self.__operator = get_operator(operator_symbol)
-        self.__dependency_names = dependency_names
+        self.operator_symbol = operator_symbol
+        self.operator = get_operator(operator_symbol)
+        self.dependency_names = dependency_names
 
     def evaluate(self) -> int:
-        dependencies = [Monkey.get_monkey(name) for name in self.__dependency_names]
+        dependencies = [Monkey.get_monkey(name) for name in self.dependency_names]
         evaluated_dependencies = [monkey.evaluate() for monkey in dependencies]
-        return functools.reduce(self.__operator, evaluated_dependencies)
+        return functools.reduce(self.operator, evaluated_dependencies)
+
+    def to_expression(self, variable_name: str) -> Binomial:
+        if self.name == variable_name:
+            return Binomial(1, 0)
+        child_expressions = [
+            Monkey.get_monkey(child_name).to_expression(variable_name)
+            for child_name in self.dependency_names
+        ]
+        return functools.reduce(self.operator, child_expressions)  # type: ignore
 
     def __repr__(self) -> str:
-        return f'{self.name}: {(" " + self.__operator_symbol + " ").join(self.__dependency_names)}'
+        return f'{self.name}: {(" " + self.operator_symbol + " ").join(self.dependency_names)}'
 
 
 def parse_monkey(monkey_str: str) -> Monkey:
@@ -143,6 +220,23 @@ def part_1(raw_input: str) -> None:
     print(f'part_1={Monkey.get_monkey("root").evaluate()}')
 
 
+@time_execution
+def part_2(raw_input: str) -> None:
+    initialize_monkeys(raw_input)
+    root = Monkey.get_monkey('root')
+    assert isinstance(root, OperatorMonkey)
+    assert len(root.dependency_names) == 2
+    left, right = map(lambda m: m.to_expression('humn'), map(Monkey.get_monkey, root.dependency_names))
+    """
+    ax+b = cx+d  // Solve for x
+    (a-c)x = d-b
+    x = (d-b)/(a-c)
+    """
+    x = (right.b - left.b) / (left.a - right.a)
+    print(f'part_2={round(x)}')
+
+
 if __name__ == '__main__':
     raw_input = get_raw_input()
     part_1(raw_input)
+    part_2(raw_input)
