@@ -9,9 +9,14 @@ from typing import (
     ParamSpec,
     TypeVar,
 )
+from geometry import (
+    Vector2D,
+    add_vectors,
+    multiply_vectors,
+    Heading,
+)
 
 import abc
-import enum
 import re
 import time
 
@@ -30,39 +35,6 @@ def time_execution(f: Callable[P, T]) -> Callable[P, T]:
 
 def get_raw_input() -> str:
     return open('22-monkey-map/input.txt', 'r').read().replace('\r\n', '\n')
-
-
-Vector2D = tuple[int, int]
-
-
-def _add(a: Vector2D, b: Vector2D) -> Vector2D:
-    (ax, ay), (bx, by) = a, b
-    return (ax + bx), (ay + by)
-
-
-def _mul(v: Vector2D, m: int) -> Vector2D:
-    x, y = v
-    return (m*x, m*y)
-
-
-class Heading(enum.Enum):
-
-    Right = 0
-    Down = 1
-    Left = 2
-    Up = 3
-
-    def get_vector(self) -> Vector2D:
-        return {
-            0: (1, 0),
-            1: (0, 1),
-            2: (-1, 0),
-            3: (0, -1),
-        }[self.value]
-
-    def rotated(self, direction: Literal['R', 'L']) -> Heading:
-        turn_direction = 1 if direction == 'R' else -1
-        return Heading((self.value + turn_direction) % 4)
 
 
 class AbstractPasswordBoard(abc.ABC):
@@ -116,7 +88,7 @@ class AbstractPasswordBoard(abc.ABC):
     def move_forward(self, distance: int) -> None:
         cur_position = self._trace_position
         for _ in range(distance):
-            next_position = _add(cur_position, self._heading.get_vector())
+            next_position = add_vectors(cur_position, self._heading.get_vector())
             next_heading = self._heading
             if not (next_position in self._open_spaces or next_position in self._closed_spaces):
                 next_position, next_heading = self._wrap_around(cur_position, self._heading)                
@@ -137,11 +109,11 @@ class AbstractPasswordBoard(abc.ABC):
 class FlatPasswordBoard(AbstractPasswordBoard):
 
     def _wrap_around(self, position: Vector2D, heading: Heading) -> tuple[Vector2D, Heading]:
-        opposite_movement_vector = _mul(heading.get_vector(), -1)
+        opposite_movement_vector = multiply_vectors(heading.get_vector(), -1)
         next_position = position
         while next_position in self._open_spaces or next_position in self._closed_spaces:
-            next_position = _add(next_position, opposite_movement_vector)
-        next_position = _add(next_position, heading.get_vector())
+            next_position = add_vectors(next_position, opposite_movement_vector)
+        next_position = add_vectors(next_position, heading.get_vector())
         return next_position, heading
 
 
